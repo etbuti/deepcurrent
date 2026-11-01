@@ -1,6 +1,9 @@
 name: DeepCurrent Windows Test
 
 on:
+  push:
+    branches:
+      - windows-test-v0.1
   workflow_dispatch:
 
 permissions:
