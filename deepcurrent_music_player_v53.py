@@ -13,77 +13,61 @@ class MusicPlayer(QWidget):
         super().__init__(parent)
         self.files = []
         self.remote_tracks = []
+        self.library_mode = "local"
+        self.playback_mode = "local"
+        self.remote_index = -1
         self.index = -1
         self.dragging = False
 
         self.player = QMediaPlayer(self)
         self.player.setVolume(70)
 
-        root = QVBoxLayout(self)
+        root = QHBoxLayout(self)
         root.setContentsMargins(8, 4, 8, 4)
+        root.setSpacing(6)
 
-        top = QHBoxLayout()
         self.add_btn = QPushButton("＋ Music")
-        self.toggle_btn = QPushButton("Library ▾")
+        self.toggle_btn = QPushButton("Library")
         self.remote_btn = QPushButton("London Library")
-        top.addWidget(self.add_btn)
-        top.addWidget(self.toggle_btn)
-        top.addWidget(self.remote_btn)
-        self.collapse_btn = QPushButton("Expand ▴")
-        top.addWidget(self.collapse_btn)
-        root.addLayout(top)
 
-        self.details = QWidget()
-        details_layout = QVBoxLayout(self.details)
-        details_layout.setContentsMargins(0, 0, 0, 0)
+        self.previous_btn = QPushButton("⏮")
+        self.play_btn = QPushButton("▶")
+        self.next_btn = QPushButton("⏭")
+
+        self.title = QLabel("No track selected")
+        self.title.setMinimumWidth(120)
+
+        self.volume = QSlider(Qt.Horizontal)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(70)
+        self.volume.setFixedWidth(85)
+
+        self.position = QSlider(Qt.Horizontal)
+        self.position.setRange(0, 0)
+        self.time_label = QLabel("0:00 / 0:00")
 
         self.library = QListWidget()
-        self.library.setMaximumHeight(150)
         self.library.hide()
+
         self.library_window = QWidget()
         self.library_window.setWindowTitle("DeepCurrent Music Library")
         self.library_window.resize(650, 420)
 
         floating_layout = QVBoxLayout(self.library_window)
         floating_layout.setContentsMargins(8, 8, 8, 8)
-
-        self.library.setMaximumHeight(16777215)
         floating_layout.addWidget(self.library)
 
-        controls = QHBoxLayout()
-        self.previous_btn = QPushButton("⏮")
-        self.play_btn = QPushButton("▶")
-        self.next_btn = QPushButton("⏭")
-        self.title = QLabel("No track selected")
-        self.title.setMinimumWidth(120)
-
-        controls.addWidget(self.previous_btn)
-        controls.addWidget(self.play_btn)
-        controls.addWidget(self.next_btn)
-        controls.addWidget(self.title, 1)
-        details_layout.addLayout(controls)
-
-        timeline = QHBoxLayout()
-        self.position = QSlider(Qt.Horizontal)
-        self.position.setRange(0, 0)
-        self.time_label = QLabel("0:00 / 0:00")
-        self.volume = QSlider(Qt.Horizontal)
-        self.volume.setRange(0, 100)
-        self.volume.setValue(70)
-        self.volume.setMaximumWidth(100)
-
-        timeline.addWidget(self.position, 1)
-        timeline.addWidget(self.time_label)
-        timeline.addWidget(QLabel("🔊"))
-        timeline.addWidget(self.volume)
-        details_layout.addLayout(timeline)
-        root.addWidget(self.details)
-        self.details.hide()
-
-
+        root.addWidget(self.add_btn)
+        root.addWidget(self.toggle_btn)
+        root.addWidget(self.remote_btn)
+        root.addWidget(self.previous_btn)
+        root.addWidget(self.play_btn)
+        root.addWidget(self.next_btn)
+        root.addWidget(self.title, 1)
+        root.addWidget(QLabel("🔊"))
+        root.addWidget(self.volume)
 
         self.remote_btn.clicked.connect(self.load_remote_library)
-        self.collapse_btn.clicked.connect(self.toggle_details)
         self.add_btn.clicked.connect(self.add_files)
         self.toggle_btn.clicked.connect(self.toggle_library)
         self.previous_btn.clicked.connect(self.previous)
@@ -100,16 +84,6 @@ class MusicPlayer(QWidget):
         self.player.stateChanged.connect(self.update_state)
         self.player.mediaStatusChanged.connect(self.media_status)
 
-    def toggle_details(self):
-        expanded = not self.details.isVisible()
-        self.details.setVisible(expanded)
-        self.updateGeometry()
-        if self.parentWidget():
-            self.parentWidget().updateGeometry()
-        self.collapse_btn.setText(
-            "Collapse ▾" if expanded else "Expand ▴"
-        )
-
     def load_remote_library(self):
         self.remote_btn.setText("Loading…")
         self.remote_btn.setEnabled(False)
@@ -122,16 +96,16 @@ class MusicPlayer(QWidget):
 
     def show_remote_tracks(self, tracks):
         self.remote_tracks = tracks
+        self.library_mode = "remote"
+        self.remote_index = -1
         self.library.clear()
         for track in tracks:
             self.library.addItem(
                 f"{track.get('artist', '')} — {track.get('name', '')}"
             )
-        self.details.show()
         self.library.show()
         self.library_window.show()
         self.library_window.raise_()
-        self.collapse_btn.setText("Collapse ▾")
         self.remote_btn.setText("London Library")
         self.remote_btn.setEnabled(True)
         self.title.setText(f"{len(tracks)} London tracks")
@@ -141,10 +115,21 @@ class MusicPlayer(QWidget):
             self, "Select Music", "",
             "Audio (*.wav *.mp3 *.flac *.m4a *.aac);;All Files (*)"
         )
+
+        if not paths:
+            return
+
+        if self.library_mode != "local":
+            self.library.clear()
+            self.library_mode = "local"
+            for path in self.files:
+                self.library.addItem(Path(path).name)
+
         for path in paths:
             if path not in self.files:
                 self.files.append(path)
                 self.library.addItem(Path(path).name)
+
         if self.index == -1 and self.files:
             self.play_index(0)
 
@@ -163,12 +148,18 @@ class MusicPlayer(QWidget):
     def play_selected_track(self, item):
         index = self.library.row(item)
 
-        if self.remote_tracks:
-            if 0 <= index < len(self.remote_tracks):
-                self.remote_track_requested(self.remote_tracks[index])
+        if self.library_mode == "remote":
+            self.play_remote_index(index)
+        else:
+            self.play_index(index)
+
+    def play_remote_index(self, index):
+        if not 0 <= index < len(self.remote_tracks):
             return
 
-        self.play_index(index)
+        self.remote_index = index
+        self.library.setCurrentRow(index)
+        self.remote_track_requested(self.remote_tracks[index])
 
     def remote_toggle_requested(self):
         print("Remote toggle not connected", flush=True)
@@ -188,7 +179,8 @@ class MusicPlayer(QWidget):
             QMediaContent(QUrl.fromLocalFile(path))
         )
         self.title.setText(Path(path).name)
-        self.library.setCurrentRow(index)
+        if self.library_mode == "local":
+            self.library.setCurrentRow(index)
         self.player.play()
 
     def toggle_play(self):
@@ -204,10 +196,26 @@ class MusicPlayer(QWidget):
             self.play_index(0)
 
     def previous(self):
+        if self.playback_mode == "remote":
+            if self.remote_tracks:
+                index = (
+                    self.remote_index - 1
+                ) % len(self.remote_tracks)
+                self.play_remote_index(index)
+            return
+
         if self.files:
             self.play_index((self.index - 1) % len(self.files))
 
     def next(self):
+        if self.playback_mode == "remote":
+            if self.remote_tracks:
+                index = (
+                    self.remote_index + 1
+                ) % len(self.remote_tracks)
+                self.play_remote_index(index)
+            return
+
         if self.files:
             self.play_index((self.index + 1) % len(self.files))
 
@@ -237,12 +245,17 @@ class MusicPlayer(QWidget):
         )
 
     def update_state(self, state):
+        if self.playback_mode == "remote":
+            return
         self.play_btn.setText(
             "⏸" if state == QMediaPlayer.PlayingState else "▶"
         )
 
     def media_status(self, status):
-        if status == QMediaPlayer.EndOfMedia:
+        if (
+            self.playback_mode == "local"
+            and status == QMediaPlayer.EndOfMedia
+        ):
             self.next()
 
     def closeEvent(self, event):

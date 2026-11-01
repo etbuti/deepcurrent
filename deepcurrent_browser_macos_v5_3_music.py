@@ -271,6 +271,20 @@ class DeepCurrentBrowser(QMainWindow):
 
         self.remote_audio_page.runJavaScript(script, updated)
 
+    def set_london_volume(self, value):
+        if not hasattr(self, "remote_audio_page"):
+            return
+
+        volume = max(0, min(100, int(value))) / 100.0
+
+        script = (
+            '(function(){'
+            'var a=document.getElementById("music");'
+            'if(a){a.volume=' + str(volume) + ';}'
+            '})()'
+        )
+        self.remote_audio_page.runJavaScript(script)
+
     def stop_london_audio(self):
         if not hasattr(self, "remote_audio_page"):
             return
@@ -305,6 +319,14 @@ class DeepCurrentBrowser(QMainWindow):
         self.music_player.title.setText(
             "London: " + track.get("name", "Unknown")
         )
+
+        if not getattr(self, "_remote_volume_hooked", False):
+            self.remote_audio_page.loadFinished.connect(
+                lambda ok: self.set_london_volume(
+                    self.music_player.volume.value()
+                ) if ok else None
+            )
+            self._remote_volume_hooked = True
 
         self.remote_audio_page.setHtml(
             """
@@ -407,6 +429,9 @@ class DeepCurrentBrowser(QMainWindow):
         self.music_player.remote_track_requested = self.play_london_track
         self.music_player.remote_toggle_requested = self.toggle_london_audio
         self.music_player.remote_stop_requested = self.stop_london_audio
+        self.music_player.volume.valueChanged.connect(
+            self.set_london_volume
+        )
         self.page.loadFinished.connect(self.install_library_channel)
 
 
