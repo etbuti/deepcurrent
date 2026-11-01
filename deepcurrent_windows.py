@@ -4,7 +4,7 @@
 
 import sys
 
-from deepcurrent_browser_macos_v5_3_music import main
+from deepcurrent_browser_crossplatform import main
 
 
 if __name__ == "__main__":
